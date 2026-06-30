@@ -1,0 +1,2 @@
+ocrmac>=1.0.0
+osxphotos>=0.76.0
