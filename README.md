@@ -17,6 +17,11 @@ If you screenshot things on your phone to read later, this turns that pile into 
 - macOS (uses Apple's Vision framework for OCR)
 - Python 3.10+
 - Photos library at `~/Pictures/Photos Library.photoslibrary`
+- [Ollama](https://ollama.com) with `minicpm-v` for AI descriptions (optional — falls back to OCR if not running)
+  ```bash
+  ollama pull minicpm-v
+  ollama serve
+  ```
 
 ## Setup
 
@@ -27,7 +32,8 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-python snapread.py
+python snapread.py                  # OCR + AI description (default)
+python snapread.py --fast           # OCR only, no Ollama
 python snapread.py --days 14
 python snapread.py --days 30 --output bookmarks.json
 python snapread.py --fetch          # download iCloud-only screenshots before scanning
@@ -38,8 +44,11 @@ python snapread.py --fetch          # download iCloud-only screenshots before sc
 | `--days` | `7` | How many days back to scan |
 | `--output` | `snapread_output.json` | JSON output file path |
 | `--fetch` | off | Download iCloud-only screenshots via Photos app before scanning |
+| `--fast` | off | Skip AI descriptions, use OCR only |
 
-Without `--fetch`, screenshots that haven't been cached locally are skipped. With `--fetch`, snapread uses [osxphotos](https://github.com/RhetTbull/osxphotos) to trigger iCloud downloads for any missing screenshots before OCR runs. The Photos app must be able to reach iCloud. Downloaded files are cleaned up automatically.
+By default, snapread sends each screenshot to a locally-running [Ollama](https://ollama.com) instance (`minicpm-v`) for a natural language description of the content. If Ollama isn't running it falls back to OCR-only automatically. Use `--fast` to always skip the AI step.
+
+Without `--fetch`, screenshots that haven't been cached locally are skipped. With `--fetch`, snapread uses [osxphotos](https://github.com/RhetTbull/osxphotos) to trigger iCloud downloads for any missing screenshots before processing. Downloaded files are cleaned up automatically.
 
 ## Output
 

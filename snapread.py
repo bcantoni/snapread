@@ -1,14 +1,16 @@
 #!/Users/brian/.pyenv/versions/ai-3.14/bin/python
 """
 snapread — scan recent iPhone screenshots from Photos library,
-extract text via OCR, and classify what each screenshot is of.
+extract text via OCR and AI vision, and classify what each screenshot is of.
 """
 import argparse
+import base64
 import json
 import re
 import shutil
 import sqlite3
 import tempfile
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -17,6 +19,14 @@ from ocrmac import ocrmac
 PHOTOS_LIBRARY = Path.home() / "Pictures/Photos Library.photoslibrary"
 PHOTOS_DB = PHOTOS_LIBRARY / "database/Photos.sqlite"
 DERIVATIVES_DIR = PHOTOS_LIBRARY / "resources/derivatives"
+THUMBNAILS_DIR = PHOTOS_LIBRARY / "resources/derivatives/masters"
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "minicpm-v"
+OLLAMA_PROMPT = (
+    "This is an iPhone screenshot. In one sentence, describe what content is shown — "
+    "focus on the subject matter (article title, social media post, product, etc.), "
+    "not the phone UI chrome like the status bar or navigation."
+)
 
 # Core Data epoch: timestamps in Photos.sqlite are seconds since 2001-01-01
 CORE_DATA_EPOCH = datetime(2001, 1, 1)
@@ -73,10 +83,36 @@ def derivative_path(directory: str, filename: str) -> Path:
     return DERIVATIVES_DIR / directory / f"{base}_1_102_o.jpeg"
 
 
+def thumbnail_path(directory: str, filename: str) -> Path:
+    base = Path(filename).stem
+    return THUMBNAILS_DIR / directory / f"{base}_4_5005_c.jpeg"
+
+
 def ocr_image(path: Path) -> str:
     try:
         annotations = ocrmac.OCR(str(path)).recognize()
         return " ".join(text for text, _conf, _bbox in annotations)
+    except Exception:
+        return ""
+
+
+def describe_image(path: Path) -> str:
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        payload = json.dumps({
+            "model": OLLAMA_MODEL,
+            "prompt": OLLAMA_PROMPT,
+            "images": [b64],
+            "stream": False,
+        }).encode()
+        req = urllib.request.Request(
+            OLLAMA_URL,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read()).get("response", "").strip()
     except Exception:
         return ""
 
@@ -137,13 +173,124 @@ def download_missing(uuids: list[str], tmpdir: Path) -> dict[str, Path]:
     return exported
 
 
-def process(days: int, output_path: Path, fetch: bool) -> None:
+TYPE_COLORS = {
+    "article":      "#2563eb",
+    "social_media": "#7c3aed",
+    "shopping":     "#d97706",
+    "code_docs":    "#059669",
+    "chat_message": "#6b7280",
+    "recipe":       "#dc2626",
+    "map_location": "#0891b2",
+    "app_store":    "#4f46e5",
+    "unknown":      "#9ca3af",
+}
+
+
+def generate_html(results: list[dict], days: int, all_urls: list[str],
+                  skipped: int, html_path: Path) -> None:
+    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    def card(r: dict) -> str:
+        thumb = Path(r.get("thumbnail_path", ""))
+        img_tag = f'<img src="file://{thumb}" alt="screenshot">' if thumb.exists() else '<div class="no-thumb">no thumbnail</div>'
+        color = TYPE_COLORS.get(r["content_type"], "#9ca3af")
+        date = r["date"][:16].replace("T", " ")
+        desc = r.get("ai_description") or r.get("ocr_preview", "")
+        urls_html = "".join(
+            f'<a href="{u}" target="_blank">{u}</a>' for u in r["urls"]
+        )
+        return f"""
+    <div class="card">
+      <a href="file://{r['derivative_path']}" target="_blank">{img_tag}</a>
+      <div class="info">
+        <div class="meta">
+          <span class="date">{date}</span>
+          <span class="badge" style="background:{color}">{r['content_type']}</span>
+        </div>
+        <p class="desc">{desc}</p>
+        {f'<div class="urls">{urls_html}</div>' if urls_html else ""}
+      </div>
+    </div>"""
+
+    cards_html = "\n".join(card(r) for r in results)
+    skip_note = f'<p class="skip-note">{skipped} screenshot{"s" if skipped != 1 else ""} skipped — not cached locally</p>' if skipped else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>snapread — {generated}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f3f4f6; color: #111827; padding: 2rem; }}
+    header {{ margin-bottom: 2rem; }}
+    header h1 {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }}
+    header p {{ color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem; }}
+    .skip-note {{ color: #9ca3af; font-size: 0.8rem; margin-top: 0.5rem; }}
+    .grid {{ display: grid;
+             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+             gap: 1.25rem; }}
+    .card {{ background: #fff; border-radius: 12px; overflow: hidden;
+             box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+             display: flex; flex-direction: column; }}
+    .card a img, .card a {{ display: block; }}
+    .card img {{ width: 100%; height: 220px; object-fit: cover; object-position: top;
+                 background: #e5e7eb; }}
+    .no-thumb {{ width: 100%; height: 220px; background: #e5e7eb;
+                 display: flex; align-items: center; justify-content: center;
+                 color: #9ca3af; font-size: 0.8rem; }}
+    .info {{ padding: 0.875rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }}
+    .meta {{ display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }}
+    .date {{ font-size: 0.75rem; color: #6b7280; }}
+    .badge {{ font-size: 0.65rem; font-weight: 600; color: #fff; padding: 0.15rem 0.5rem;
+              border-radius: 99px; letter-spacing: 0.03em; text-transform: uppercase; }}
+    .desc {{ font-size: 0.82rem; color: #374151; line-height: 1.5; }}
+    .urls {{ display: flex; flex-direction: column; gap: 0.25rem; margin-top: auto; padding-top: 0.5rem;
+             border-top: 1px solid #f3f4f6; }}
+    .urls a {{ font-size: 0.75rem; color: #2563eb; text-decoration: none;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .urls a:hover {{ text-decoration: underline; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>snapread</h1>
+    <p>Last {days} day{"s" if days != 1 else ""} &middot; {len(results)} screenshots &middot; generated {generated}</p>
+    {skip_note}
+  </header>
+  <div class="grid">
+{cards_html}
+  </div>
+</body>
+</html>"""
+
+    html_path.write_text(html)
+
+
+def ollama_available() -> bool:
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def process(days: int, output_path: Path, html_path: Path, fetch: bool, fast: bool) -> None:
     rows = fetch_screenshots(days)
     total = len(rows)
 
-    print(f"\nsnapread — last {days} day{'s' if days != 1 else ''} — {total} screenshots found\n")
+    use_ai = not fast
+    if use_ai and not ollama_available():
+        print("Note: Ollama not running — falling back to OCR-only. Start with: ollama serve\n")
+        use_ai = False
 
-    # Identify which rows have missing derivatives
+    print(f"snapread — last {days} day{'s' if days != 1 else ''} — {total} screenshots found")
+    mode = "OCR only" if not use_ai else f"OCR + {OLLAMA_MODEL}"
+    print(f"mode: {mode}\n")
+
+    # Identify and optionally download missing derivatives
     missing_uuids = []
     if fetch:
         for _ts, directory, filename in rows:
@@ -159,16 +306,11 @@ def process(days: int, output_path: Path, fetch: bool) -> None:
         fetched = download_missing(missing_uuids, tmpdir)
         print(f"Downloaded {len(fetched)} of {len(missing_uuids)}.\n")
 
-    col_w = (18, 14, 5, 45)
-    header = f"{'Date':<{col_w[0]}}  {'Type':<{col_w[1]}}  {'URLs':>{col_w[2]}}  {'Preview':<{col_w[3]}}"
-    print(header)
-    print("─" * (sum(col_w) + 6))
-
     results = []
     skipped = 0
     all_urls: list[str] = []
 
-    for ts, directory, filename in rows:
+    for i, (ts, directory, filename) in enumerate(rows, 1):
         uuid = Path(filename).stem
         path = derivative_path(directory, filename)
 
@@ -183,18 +325,30 @@ def process(days: int, output_path: Path, fetch: bool) -> None:
         text = ocr_image(path)
         urls = extract_urls(text)
         content_type = classify(text, urls)
-        preview = text[:col_w[3]].replace("\n", " ") if text else "(no text)"
 
-        date_str = date.strftime("%Y-%m-%d %H:%M")
-        print(f"{date_str:<{col_w[0]}}  {content_type:<{col_w[1]}}  {len(urls):>{col_w[2]}}  {preview:<{col_w[3]}}")
+        description = ""
+        if use_ai:
+            print(f"[{i}/{total}] {date.strftime('%Y-%m-%d %H:%M')} — describing...", end="\r", flush=True)
+            description = describe_image(path)
 
+        url_label = f"{len(urls)} URL{'s' if len(urls) != 1 else ''}" if urls else "no URLs"
+        print(f"{date.strftime('%Y-%m-%d %H:%M')}  {content_type:<14}  {url_label}")
+        if description:
+            print(f"  {description}")
+        elif text:
+            preview = text[:120].replace("\n", " ")
+            print(f"  {preview}")
+
+        thumb = thumbnail_path(directory, filename)
         all_urls.extend(u for u in urls if u not in all_urls)
         results.append({
             "date": date.isoformat(),
             "uuid": uuid,
             "derivative_path": str(path),
+            "thumbnail_path": str(thumb) if thumb.exists() else "",
             "content_type": content_type,
             "urls": urls,
+            "ai_description": description,
             "ocr_text": text,
             "ocr_preview": text[:120],
         })
@@ -224,18 +378,26 @@ def process(days: int, output_path: Path, fetch: bool) -> None:
     output_path.write_text(json.dumps(output, indent=2))
     print(f"\nJSON saved to: {output_path}")
 
+    generate_html(results, days, all_urls, skipped, html_path)
+    print(f"HTML saved to: {html_path}")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scan recent iPhone screenshots and extract bookmarkable content"
     )
-    parser.add_argument("--days", type=int, default=7, help="How many days back to scan (default: 7)")
+    parser.add_argument("--days", type=int, default=7,
+                        help="How many days back to scan (default: 7)")
     parser.add_argument("--output", type=Path, default=Path("snapread_output.json"),
                         help="JSON output file path (default: snapread_output.json)")
+    parser.add_argument("--html", type=Path, default=Path("snapread_output.html"),
+                        help="HTML output file path (default: snapread_output.html)")
     parser.add_argument("--fetch", action="store_true",
                         help="Download iCloud-only screenshots via Photos app before scanning")
+    parser.add_argument("--fast", action="store_true",
+                        help="Skip AI descriptions, use OCR only")
     args = parser.parse_args()
-    process(args.days, args.output, args.fetch)
+    process(args.days, args.output, args.html, args.fetch, args.fast)
 
 
 if __name__ == "__main__":
