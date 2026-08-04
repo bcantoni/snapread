@@ -73,6 +73,11 @@ final class TriageStore {
     }
 
     func scan() async {
+        guard pendingDeletions.isEmpty else {
+            lastError = "Apply or undo the pending deletions before rescanning."
+            return
+        }
+        cancelProcessing()
         phase = .scanning
         loadRecords()
         let cutoff = Calendar.current.date(byAdding: .day, value: -lookbackDays, to: .now) ?? .now
@@ -117,9 +122,14 @@ final class TriageStore {
 
     func archive() {
         guard let item = currentItem else { return }
-        queue.remove(at: currentIndex)
         records[item.id] = TriageRecord(status: "archived", date: .now)
-        saveRecords()
+        guard saveRecords() else {
+            records.removeValue(forKey: item.id)
+            return
+        }
+        item.processingTask?.cancel()
+        item.processingTask = nil
+        queue.remove(at: currentIndex)
         sessionArchived += 1
         undoStack.append(.archive(item, index: currentIndex))
         finishIfPastEnd()
@@ -128,6 +138,8 @@ final class TriageStore {
 
     func markForDeletion() {
         guard let item = currentItem else { return }
+        item.processingTask?.cancel()
+        item.processingTask = nil
         queue.remove(at: currentIndex)
         pendingDeletions.append(item)
         undoStack.append(.markDelete(item, index: currentIndex))
@@ -139,8 +151,12 @@ final class TriageStore {
         guard let action = undoStack.popLast() else { return }
         switch action {
         case .archive(let item, let index):
-            records.removeValue(forKey: item.id)
-            saveRecords()
+            let record = records.removeValue(forKey: item.id)
+            guard saveRecords() else {
+                if let record { records[item.id] = record }
+                undoStack.append(action)
+                return
+            }
             sessionArchived -= 1
             reinsert(item, at: index)
         case .markDelete(let item, let index):
@@ -161,6 +177,18 @@ final class TriageStore {
         guard !queue.isEmpty else { return }
         currentIndex = 0
         phase = .reviewing
+        prefetch()
+    }
+
+    func retry(_ item: ScreenshotItem) {
+        guard queue.contains(where: { $0.id == item.id }) else { return }
+        item.processingTask?.cancel()
+        item.processingTask = nil
+        item.image = nil
+        item.ocrText = ""
+        item.urls = []
+        item.interpretation = nil
+        item.phase = .queued
         prefetch()
     }
 
@@ -203,7 +231,7 @@ final class TriageStore {
         let window = currentIndex..<min(currentIndex + prefetchDepth, queue.count)
         for item in queue[window] where item.phase == .queued {
             item.phase = .loadingImage(0)
-            Task { await Self.process(item) }
+            item.processingTask = Task { await Self.process(item) }
         }
     }
 
@@ -216,15 +244,20 @@ final class TriageStore {
                     }
                 }
             }
+            try Task.checkCancellation()
             item.image = image
             item.phase = .analyzing
             let text = try await OCRService.recognizeText(in: image)
+            try Task.checkCancellation()
             item.ocrText = text
             item.urls = OCRService.extractURLs(from: text)
             item.interpretation = await InterpretationService.shared.interpret(
                 ocrText: text, urls: item.urls
             )
+            try Task.checkCancellation()
             item.phase = .ready
+        } catch is CancellationError {
+            item.phase = .queued
         } catch {
             item.phase = .failed(error.localizedDescription)
         }
@@ -235,19 +268,40 @@ final class TriageStore {
     private var recordsURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("SnapRead", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("triage.json")
     }
 
     private func loadRecords() {
-        guard let data = try? Data(contentsOf: recordsURL),
-              let decoded = try? JSONDecoder().decode([String: TriageRecord].self, from: data)
-        else { return }
-        records = decoded
+        guard FileManager.default.fileExists(atPath: recordsURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: recordsURL)
+            records = try JSONDecoder().decode([String: TriageRecord].self, from: data)
+        } catch {
+            lastError = "SnapRead couldn't read its triage history. Previously handled screenshots may appear again."
+            records = [:]
+        }
     }
 
-    private func saveRecords() {
-        guard let data = try? JSONEncoder().encode(records) else { return }
-        try? data.write(to: recordsURL, options: .atomic)
+    @discardableResult
+    private func saveRecords() -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: recordsURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try JSONEncoder().encode(records)
+            try data.write(to: recordsURL, options: .atomic)
+            return true
+        } catch {
+            lastError = "SnapRead couldn't save your triage history: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func cancelProcessing() {
+        for item in queue {
+            item.processingTask?.cancel()
+            item.processingTask = nil
+        }
     }
 }

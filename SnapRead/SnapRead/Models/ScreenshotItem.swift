@@ -111,6 +111,7 @@ final class ScreenshotItem: Identifiable {
     var ocrText: String = ""
     var urls: [URL] = []
     var interpretation: Interpretation?
+    var processingTask: Task<Void, Never>?
 
     nonisolated init(asset: PHAsset) {
         self.asset = asset
