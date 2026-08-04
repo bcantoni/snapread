@@ -1,4 +1,4 @@
-# snapread
+# SnapRead Mac Application
 
 Your iPhone screenshots are an implicit to-do list — movies to watch, books to read, articles and tweets to check out. snapread turns that pile into something you can actually act on, then clean up.
 
@@ -26,15 +26,15 @@ Everything runs on-device; nothing leaves your Mac.
 
 One screenshot at a time, keyboard-first:
 
-| Key | Action |
-|-----|--------|
-| `→` / `Space` | Older — move on without deciding, stays in the inbox |
-| `←` | Newer — go back to the more recent screenshot |
-| `A` | Archive — done with it, photo is kept |
-| `⌫` | Delete — mark for removal from Photos |
-| `Return` / `O` | Open the first link in your browser |
-| `C` | Copy the first link (`⇧C` copies the OCR text) |
-| `⌘Z` | Undo the last archive or delete-mark |
+| Key            | Action                                               |
+| -------------- | ---------------------------------------------------- |
+| `→` / `Space`  | Older — move on without deciding, stays in the inbox |
+| `←`            | Newer — go back to the more recent screenshot        |
+| `A`            | Archive — done with it, photo is kept                |
+| `⌫`            | Delete — mark for removal from Photos                |
+| `Return` / `O` | Open the first link in your browser                  |
+| `C`            | Copy the first link (`⇧C` copies the OCR text)       |
+| `⌘Z`           | Undo the last archive or delete-mark                 |
 
 Deletes don't interrupt you with a dialog per item: they're collected and applied in **one batch** (a single system confirmation) from the end-of-queue screen. Deleted screenshots go to Photos' Recently Deleted and the deletion syncs to your iPhone via iCloud.
 
@@ -75,10 +75,10 @@ python snapread.py --days 30 --output bookmarks.json
 python snapread.py --fetch          # download iCloud-only screenshots before scanning
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--days` | `7` | How many days back to scan |
-| `--output` | `snapread_output.json` | JSON output file path |
-| `--html` | `snapread_output.html` | HTML output file path |
-| `--fetch` | off | Download iCloud-only screenshots via Photos app before scanning |
-| `--fast` | off | Skip AI descriptions, use OCR only |
+| Flag       | Default                | Description                                                     |
+| ---------- | ---------------------- | --------------------------------------------------------------- |
+| `--days`   | `7`                    | How many days back to scan                                      |
+| `--output` | `snapread_output.json` | JSON output file path                                           |
+| `--html`   | `snapread_output.html` | HTML output file path                                           |
+| `--fetch`  | off                    | Download iCloud-only screenshots via Photos app before scanning |
+| `--fast`   | off                    | Skip AI descriptions, use OCR only                              |
