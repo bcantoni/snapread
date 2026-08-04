@@ -142,19 +142,19 @@ struct ActionBar: View {
             Button {
                 store.goBack()
             } label: {
-                Label("Back", systemImage: "arrow.left")
+                Label("Newer", systemImage: "arrow.left")
             }
             .keyboardShortcut(.leftArrow, modifiers: [])
             .disabled(store.currentIndex == 0)
-            .help("Go back to the previous screenshot (←)")
+            .help("Go back to the newer screenshot (←)")
 
             Button {
                 store.skip()
             } label: {
-                Label("Skip", systemImage: "arrow.right")
+                Label("Older", systemImage: "arrow.right")
             }
             .keyboardShortcut(.rightArrow, modifiers: [])
-            .help("Decide later — stays in the inbox (→ or Space)")
+            .help("Move on to the older screenshot — this one stays in the inbox (→ or Space)")
 
             Button {
                 store.archive()

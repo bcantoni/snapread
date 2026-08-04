@@ -28,8 +28,8 @@ One screenshot at a time, keyboard-first:
 
 | Key | Action |
 |-----|--------|
-| `→` / `Space` | Skip — decide later, stays in the inbox |
-| `←` | Go back to the previous screenshot |
+| `→` / `Space` | Older — move on without deciding, stays in the inbox |
+| `←` | Newer — go back to the more recent screenshot |
 | `A` | Archive — done with it, photo is kept |
 | `⌫` | Delete — mark for removal from Photos |
 | `Return` / `O` | Open the first link in your browser |
