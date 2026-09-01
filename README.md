@@ -71,9 +71,9 @@ Note: with no Developer ID configured, builds are ad-hoc signed, so macOS may re
 
 The original CLI experiment that validated the idea. It reads the Photos SQLite database directly, OCRs cached screenshot derivatives with Apple Vision (via [ocrmac](https://github.com/straussmaximilian/ocrmac)), classifies content with regexes, optionally gets AI descriptions from a local [Ollama](https://ollama.com) `minicpm-v` model, and writes a terminal table plus JSON/HTML reports.
 
-The Mac app replaces its fragile parts (raw SQLite queries, derivative-cache paths, osxphotos-driven iCloud fetches) with sanctioned PhotoKit APIs — and adds what a CLI can't: triage state and real deletion.
 
 ```bash
+cd orig-python
 pip install -r requirements.txt
 python snapread.py                  # OCR + AI description (default)
 python snapread.py --fast           # OCR only, no Ollama
