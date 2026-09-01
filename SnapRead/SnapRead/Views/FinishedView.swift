@@ -64,6 +64,8 @@ struct FinishedView: View {
                 Button("Rescan") {
                     Task { await store.scan() }
                 }
+                .disabled(!store.pendingDeletions.isEmpty)
+                .help("Apply or undo pending deletions before rescanning")
             }
             .padding(.top, 4)
         }

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Right-hand panel: what the screenshot is, its links, and the raw OCR text.
 struct InterpretationPanel: View {
+    @Environment(TriageStore.self) private var store
     let item: ScreenshotItem
     @State private var showOCRText = false
 
@@ -30,12 +31,28 @@ struct InterpretationPanel: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
-                } else if item.phase == .analyzing || item.image == nil {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Interpreting…")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                } else {
+                    switch item.phase {
+                    case .failed(let message):
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Analysis failed", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("Retry") {
+                                store.retry(item)
+                            }
+                        }
+                    case .analyzing, .loadingImage, .queued:
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(item.phase == .analyzing ? "Interpreting…" : "Preparing screenshot…")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    case .ready:
+                        EmptyView()
                     }
                 }
 
