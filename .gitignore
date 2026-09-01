@@ -3,9 +3,10 @@ snapread_output.json
 snapread_output.html
 __pycache__/
 
-# Xcode (project is generated from SnapRead/project.yml via xcodegen)
-SnapRead/SnapRead.xcodeproj/
-SnapRead/build/
+# Xcode (project is generated from project.yml via xcodegen)
+SnapRead.xcodeproj/
+build/
 DerivedData/
 xcuserdata/
+
 .DS_Store

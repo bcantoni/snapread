@@ -1,7 +1,7 @@
 .PHONY: clean debug release
 .DEFAULT_GOAL := help
 
-PROJECT_DIR := SnapRead
+PROJECT_DIR := .
 PROJECT := $(PROJECT_DIR)/SnapRead.xcodeproj
 SCHEME := SnapRead
 DERIVED_DATA := $(PROJECT_DIR)/build
