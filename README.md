@@ -11,7 +11,7 @@ This repo contains two implementations of the idea:
 
 A native SwiftUI app that shows your recent iPhone screenshots one at a time, tells you what each one is (category, title, one-line summary), extracts any links, and lets you act: open the link, copy it, archive the screenshot, or delete it from your Photos library for real.
 
-<!-- screenshot of the app here -->
+![Screenshot of SnapRead app reviewing mobile screenshots](snapread-screenshot.png)
 
 ### How it works
 
