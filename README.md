@@ -36,7 +36,7 @@ One screenshot at a time, keyboard-first:
 | `C`            | Copy the first link (`⇧C` copies the OCR text)       |
 | `⌘Z`           | Undo the last archive or delete-mark                 |
 
-Deletes don't interrupt you with a dialog per item: they're collected and applied in **one batch** (a single system confirmation) from the end-of-queue screen. Deleted screenshots go to Photos' Recently Deleted and the deletion syncs to your iPhone via iCloud.
+Deletes don't interrupt you with a dialog per item: they're collected and applied automatically in **one batch** (a single system confirmation) when review reaches the end or when you quit the app. The end-of-queue screen also offers the batch action for retrying a cancelled or failed request. Deleted screenshots go to Photos' Recently Deleted and the deletion syncs to your iPhone via iCloud.
 
 Triage decisions are persisted (`~/Library/Containers/org.cantoni.SnapRead/Data/Library/Application Support/SnapRead/triage.json`), so archived and deleted screenshots never reappear in the inbox. Skipped ones do, until you decide.
 

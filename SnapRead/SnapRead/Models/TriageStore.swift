@@ -37,6 +37,8 @@ final class TriageStore {
 
     private var records: [String: TriageRecord] = [:]
     private var undoStack: [UndoAction] = []
+    private var deletionCommitTask: Task<Void, Never>?
+    private var committingDeletions = false
     private let prefetchDepth = 3
 
     var currentItem: ScreenshotItem? {
@@ -88,6 +90,8 @@ final class TriageStore {
         currentIndex = 0
         pendingDeletions = []
         undoStack = []
+        deletionCommitTask?.cancel()
+        deletionCommitTask = nil
         sessionArchived = 0
         sessionDeleted = 0
         phase = queue.isEmpty ? .empty : .reviewing
@@ -197,7 +201,9 @@ final class TriageStore {
     /// Deletes all marked screenshots from Photos in one batch
     /// (single system confirmation dialog).
     func commitDeletions() async {
-        guard !pendingDeletions.isEmpty else { return }
+        guard !pendingDeletions.isEmpty, !committingDeletions else { return }
+        committingDeletions = true
+        defer { committingDeletions = false }
         let items = pendingDeletions
         do {
             try await PhotoLibraryService.shared.delete(items.map(\.asset))
@@ -220,6 +226,16 @@ final class TriageStore {
     private func finishIfPastEnd() {
         if queue.isEmpty || currentIndex >= queue.count {
             phase = .finished
+            scheduleDeletionCommit()
+        }
+    }
+
+    private func scheduleDeletionCommit() {
+        guard !pendingDeletions.isEmpty, deletionCommitTask == nil else { return }
+        deletionCommitTask = Task { [weak self] in
+            guard let self else { return }
+            await self.commitDeletions()
+            self.deletionCommitTask = nil
         }
     }
 
