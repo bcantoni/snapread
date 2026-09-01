@@ -50,6 +50,12 @@ Settings (`⌘,`) control the lookback window (default: 30 days).
 
 ### Building
 
+The Makefile has most useful commands:
+
+* make clean
+* make debug
+* make release
+
 ```bash
 cd SnapRead
 xcodegen generate
